@@ -1,3 +1,4 @@
+from operator import truediv
 import os
 import csv
 import json
@@ -295,8 +296,18 @@ def main():
 
                 study_data = study_data.to(device)
                 study_target = study_target.to(device)
-                study_paired_data = study_paired_data.to(device)
+                study_paired_data = study_paired_data.to(device)  
 
+                if isinstance(config['activation_coefficient'], list):
+                  activation_flipped = [config['activation_coefficient'][1], config['activation_coefficient'][0]]
+                  study_data_2, study_target_2, study_paired_data_2 = format_data(alphabet, study_set, labels_study, model, device,
+                                                                          activation_flipped,
+                                                                          config['overlap_option'])
+
+                  study_data_2 = study_data_2.to(device)
+                  study_target_2 = study_target_2.to(device)
+                  study_paired_data_2 = study_paired_data_2.to(device)    
+                
                 val_data, val_target, val_paired_data = format_data(alphabet_validation, validation_set, labels_study, model, device,
                                                                           config['activation_coefficient'],
                                                                           config['overlap_option'])
@@ -304,12 +315,24 @@ def main():
                 val_target = val_target.to(device)
                 val_paired_data = val_paired_data.to(device)
 
-                # Study
-                # --------------------------------------------------------------------------
                 for step in range(config['late_response_steps']):
 
-                        study_train_losses, _ = model(study_data, study_target, mode='study', ec_inputs=study_data,
-                                                          paired_inputs=study_paired_data)
+                        # Study
+                        # --------------------------------------------------------------------------
+
+                        studied = False
+                        if isinstance(config['activation_coefficient'], list) and config['random_activation_coefficient']:
+                          import random
+                          f = random.random()
+                          if f > 0.5:
+                            study_train_losses, _ = model(study_data_2, study_target_2, mode='study', ec_inputs=study_data_2,
+                                                            paired_inputs=study_paired_data_2)
+                            studied = True  
+                                            
+                        if not studied:
+                          study_train_losses, _ = model(study_data, study_target, mode='study', ec_inputs=study_data,
+                                                        paired_inputs=study_paired_data)
+                        
                         study_train_loss = study_train_losses['stm']['memory']['loss']
 
                         if hebbian:
@@ -326,13 +349,18 @@ def main():
                         validation_losses, _ = model(val_data, val_target, mode='validate', ec_inputs=val_data,
                                                      paired_inputs=val_paired_data)
 
+                        # Recall
+                        # --------------------------------------------------------------------------
+
                         if step == (config['early_response_step']-1) or step == (config['late_response_steps']-1):
                             with torch.no_grad():
                                 recall_data = recall_data.to(device)
                                 recall_target = recall_target.to(device)
                                 recall_paired_data = recall_paired_data.to(device)
 
-                                _, recall_outputs = model(recall_data, recall_target, mode='recall', ec_inputs=recall_data,
+                                recall_data_k = config['activation_coefficient_recall'] * recall_data  
+
+                                _, recall_outputs = model(recall_data_k, recall_target, mode='recall', ec_inputs=recall_data_k,
                                                           paired_inputs=recall_paired_data)
 
                                 # Perform another iteration using recalled outputs
@@ -548,7 +576,17 @@ def convert_sequence_to_images(alphabet, sequence, main_labels, element='first')
 
     return pairs_images, labels
 
-def format_data(alphabet, data, labels, model,device, coefficient, option):
+def format_data(alphabet, data, labels, model, device, coefficient, option):
+    """ 
+    Coefficient can be a single number of a pair 
+    If it is single, then the value is applied to the first item in the pair
+    Otherwise, the two coefficients are multiplied by their respective items in the pair
+    i.e. coefficient = [kA, kB],   then kA * itemA, kB * itemB
+    """
+
+    if not isinstance(coefficient, list):
+      coefficient = [coefficient, 1.0]
+
     paired_data, paired_target = convert_sequence_to_images(alphabet=alphabet,
                                                                         sequence=data, element='both',
                                                                         main_labels=labels)
@@ -574,7 +612,7 @@ def format_data(alphabet, data, labels, model,device, coefficient, option):
     for i in range(data_A['ltm']['memory']['output'].size(0)):
         data_A_i = data_A['ltm']['memory']['output'].detach()[i]
         data_B_i = data_B['ltm']['memory']['output'].detach()[i]
-        embedder = Overlap(coefficient, option)
+        embedder = Overlap(coefficient[0], coefficient[1], option)
         data_i = embedder.join(data_A_i, data_B_i)
         data[i] = data_i
 

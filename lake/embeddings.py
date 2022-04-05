@@ -3,11 +3,14 @@ from scipy import stats
 import csv
 
 class Correlations:
+    """ Used for various explorations, not the actual results """
+
     def __init__(self, path, seed):
         self.path = path
         self.seed = seed
 
     def correlation(self, data_A, data_B, file_name):
+        """ used to investigate correlation of alphabets themselves """
         data_A_flat = torch.flatten(data_A, start_dim=1)
         data_B_flat = torch.flatten(data_B, start_dim=1)
         correlation = [[stats.pearsonr(a, b)[0] for a in data_B_flat] for b in
@@ -19,6 +22,7 @@ class Correlations:
             writer_file.writerows(correlation)
 
     def transitivity(self, ca1_outputs, characters):
+        """ trying to explore whether we actually get transitivity """
 
         filtered_correlation = [['correlation_A', 'correlation_filter_A', 'similarity_A', 'similarity_filter_A',
                                         'correlation_B', 'correlation_filter_B', 'similarity_B', 'similarity_filter_B',
@@ -84,13 +88,21 @@ class Correlations:
 
 
 class Overlap:
-    def __init__(self, coefficient, option):
-        self.coefficient = coefficient
-        self.option = option
+    def __init__(self, kA, kB, option):
+      """ 
+      Initialise Overlap class, which will be used to create a new input, from a pair of single stimuli (A and B)
+      The `coefficient`s scale the single inputs.
+      coefficient = scales input A
+      coefficient_B = scales input B
+      """
+
+      self.kA = kA
+      self.kB = kB
+      self.option = option
 
     def join(self, A, B):
         if self.option == 'add':
-            overlapped_pair = self.coefficient * A + B
+            overlapped_pair = self.kA * A + self.kB * B
         else:
             A_tmp = torch.flatten(A, start_dim=0)
             B_tmp = torch.flatten(B, start_dim=0)
@@ -107,9 +119,9 @@ class Overlap:
                     if self.option == 'maximum':
                         overlapped_pair[i] = torch.max(torch.stack([A_tmp[i], B_tmp[i]]))
                 if A_tmp[i] != B_tmp[i] and A_tmp[i] == 0:
-                    overlapped_pair[i] = B_tmp[i]
+                    overlapped_pair[i] = self.kB * B_tmp[i]
                 if A_tmp[i] != B_tmp[i] and B_tmp[i] == 0:
-                    overlapped_pair[i] = self.coefficient * A_tmp[i]
+                    overlapped_pair[i] = self.kA * A_tmp[i]
         overlapped_pair = torch.reshape(overlapped_pair, A.size())
         return overlapped_pair
 
