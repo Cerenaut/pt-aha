@@ -63,7 +63,9 @@ This is an implementation of the experiments described in [5].
 
 To run experiments, you will need a valid configuration file. There is are samples located in `aha/definitions/schapiro`.
 
-As for the Lake experiments, you can select the type of STM (short term memory) and LTM (visual component), and the first stage is to pretrain the LTM. You can specify it in the config, and then skip pre-training.
+Run the experiment using `python schapiro_experiments.py --config path/to/config.json`
+
+As with the Lake experiments, you can select the type of STM (short term memory) and LTM (visual component), and the first stage is to pretrain the LTM. You can specify it in the config, and then skip pre-training.
 
 It is possible to choose from the following parameters:
 - the language of the presented images (Latin, N_KO). There are two variants of N_KO, deliberately filtered to select more distinct characters.
